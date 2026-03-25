@@ -23,6 +23,13 @@ export default function MovieCard({ movie }) {
               <span className="text-xs text-gray-400 ml-1">({movie.rottenTomatoesStatus})</span>
             )}
           </p>
+
+          <p className="text-gray-700">
+            Metascore: <span className="font-medium">{movie.metascore}</span>
+            {movie.metascoreStatus && movie.metascoreStatus !== 'ok' && (
+              <span className="text-xs text-gray-400 ml-1">({movie.metascoreStatus})</span>
+            )}
+          </p>
         </div>
 
         {movie.liveFetchedAt && (

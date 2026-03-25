@@ -10,9 +10,12 @@ import puppeteer from 'puppeteer';
  * - Connection reuse (pools up to MAX_INSTANCES)
  * - Graceful cleanup on process termination
  * - Logging with [BROWSER-POOL] prefix
+ * 
+ * Note: MAX_INSTANCES is set to 5 to support concurrent scraping
+ * of multiple sources (IMDb, Rotten Tomatoes, Metacritic) in parallel.
  */
 
-const MAX_INSTANCES = 2;
+const MAX_INSTANCES = 5;
 const BROWSER_POOL = [];
 let LAUNCHING = false;
 

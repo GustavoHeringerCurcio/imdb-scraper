@@ -15,6 +15,7 @@ async function fetchLiveRatings(movies) {
     body: JSON.stringify({
       movies: movies.map((movie) => ({
         id: movie.id,
+        title: movie.title,
         imdbID: movie.imdbID,
         rottenTomatoesSlug: movie.rottenTomatoesSlug,
       })),
@@ -48,9 +49,13 @@ function mergeWithLiveRatings(movies, liveRatings) {
       rottenTomatoes: live?.rottenTomatoes?.value && live.rottenTomatoes.value !== 'N/A'
         ? live.rottenTomatoes.value
         : 'N/A',
+      metascore: live?.metascore?.value && live.metascore.value !== 'N/A'
+        ? live.metascore.value
+        : 'N/A',
       // Track source/status for debugging
       imdbStatus: live?.imdb?.status || 'no-data',
       rottenTomatoesStatus: live?.rottenTomatoes?.status || 'no-data',
+      metascoreStatus: live?.metascore?.status || 'no-data',
       liveFetchedAt: live?.fetchedAt || null,
     };
   });
