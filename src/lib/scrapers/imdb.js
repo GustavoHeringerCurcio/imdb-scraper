@@ -14,23 +14,38 @@ export async function scrapeImdbRating(imdbId) {
 
   const url = `https://www.imdb.com/title/${imdbId}/`;
 
-  // Extraction function: Get rating from the hero rating bar
+  // Extraction function: Get BOTH rating and metascore from IMDb page
   const extractFn = (selector) => {
-    const element = document.querySelector(selector);
-    if (!element) return null;
+    const result = {
+      imdbRating: null,
+      metascore: null,
+    };
 
-    // Try direct text content first
-    let text = element.textContent.trim();
-    if (text && text.match(/\d+\.\d+/)) return text;
-
-    // Try first span child
-    const span = element.querySelector('span');
-    if (span) {
-      text = span.textContent.trim();
-      if (text && text.match(/\d+\.\d+/)) return text;
+    // Extract IMDb rating
+    const ratingElement = document.querySelector(selector);
+    if (ratingElement) {
+      let text = ratingElement.textContent.trim();
+      if (text && text.match(/\d+\.\d+/)) {
+        result.imdbRating = text;
+      } else {
+        const span = ratingElement.querySelector('span');
+        if (span) {
+          text = span.textContent.trim();
+          if (text && text.match(/\d+\.\d+/)) result.imdbRating = text;
+        }
+      }
     }
 
-    return null;
+    // Extract Metascore from IMDb page
+    const metascoreElement = document.querySelector('.metacritic-score-box');
+    if (metascoreElement) {
+      const text = metascoreElement.textContent.trim();
+      if (text && text.match(/^\d+$/)) {
+        result.metascore = text;
+      }
+    }
+
+    return result;
   };
 
   return scrapeWithPuppeteer({
@@ -40,11 +55,11 @@ export async function scrapeImdbRating(imdbId) {
     extractFn,
     options: {
       navigation: {
-        waitUntil: 'domcontentloaded',
-        timeout: 15000,
+        waitUntil: 'networkidle0',
+        timeout: 25000,
         userAgent: process.env.IMDB_USER_AGENT,
       },
-      selectorTimeout: 8000,
+      selectorTimeout: 12000,
     },
   });
 }

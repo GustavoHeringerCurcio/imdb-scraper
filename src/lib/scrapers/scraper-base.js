@@ -37,13 +37,30 @@ export function buildErrorResponse(source, status, url = null) {
 
 /**
  * Build a standardized success response.
+ * Can handle single value or multi-field object.
  * 
  * @param {string} source - Scraper source name
- * @param {string|number} value - Extracted rating value
+ * @param {string|number|object} value - Extracted rating value or object with multiple fields
  * @param {string} url - URL successfully scraped
- * @returns {object} Standardized success response
+ * @returns {object|object} Single response or object with multiple field responses
  */
 export function buildSuccessResponse(source, value, url) {
+  // Handle multi-field extraction (e.g., { imdbRating, metascore })
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const responses = {};
+    for (const [field, fieldValue] of Object.entries(value)) {
+      responses[field] = {
+        source,
+        value: String(fieldValue),
+        status: 'ok',
+        url,
+        timestamp: new Date().toISOString(),
+      };
+    }
+    return responses;
+  }
+
+  // Handle single value
   return {
     source,
     value: String(value),
@@ -128,35 +145,38 @@ export async function waitAndExtract(page, selector, options = {}) {
   } = options;
 
   try {
-    // Wait for selector
-    await page.waitForSelector(selector, { timeout });
+    // Try to wait for selector, but don't fail if it times out - proceed to extraction anyway
+    try {
+      await page.waitForSelector(selector, { timeout });
+    } catch (waitError) {
+      // Selector not found within timeout, but we'll still try extraction
+      // This allows extractFn to search the whole page if selector doesn't exist
+    }
 
-    // If no extraction function provided, just return that selector was found
+    // Extract data via page.evaluate
     if (!extractFn) {
       return { found: true };
     }
 
-    // Extract data via page.evaluate
     try {
       const value = await page.evaluate(extractFn, selector);
+      if (value === null || value === undefined) {
+        return {
+          found: false,
+          error: 'Extraction returned null',
+        };
+      }
       return { found: true, value };
     } catch (extractError) {
       return {
-        found: true,
-        value: null,
+        found: false,
         error: `Extraction failed: ${extractError.message}`,
       };
     }
-  } catch (waitError) {
-    if (waitError.name === 'TimeoutError') {
-      return {
-        found: false,
-        error: 'Selector timeout',
-      };
-    }
+  } catch (error) {
     return {
       found: false,
-      error: waitError.message,
+      error: error.message,
     };
   }
 }
@@ -224,7 +244,28 @@ export async function scrapeWithPuppeteer(config) {
       return buildErrorResponse(source, 'parse-error', url);
     }
 
-    if (extractResult.value === null || extractResult.value === undefined || extractResult.value === 'N/A') {
+    if (extractResult.value === null || extractResult.value === undefined) {
+      console.warn(`${logPrefix} No value extracted`);
+      return buildErrorResponse(source, 'parse-error', url);
+    }
+
+    // Handle multi-field extraction (e.g., { imdbRating, metascore })
+    if (typeof extractResult.value === 'object' && !Array.isArray(extractResult.value)) {
+      const responses = buildSuccessResponse(source, extractResult.value, url);
+      // Check if any field was successfully extracted
+      const hasAnyValue = Object.values(responses).some(r => 
+        r && r.value !== 'null' && r.value !== 'undefined' && r.value !== 'N/A'
+      );
+      if (!hasAnyValue) {
+        console.warn(`${logPrefix} No fields extracted from multi-field response`);
+        return buildErrorResponse(source, 'parse-error', url);
+      }
+      console.log(`${logPrefix} ✓ Successfully extracted multi-field response`);
+      return responses;
+    }
+
+    // Handle single field extraction
+    if (extractResult.value === 'N/A') {
       console.warn(`${logPrefix} No value extracted`);
       return buildErrorResponse(source, 'parse-error', url);
     }
