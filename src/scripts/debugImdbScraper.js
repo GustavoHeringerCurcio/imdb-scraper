@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Debug script to test IMDb scraping for each movie individually
+ * Debug script to test IMDb scraping for each movie individually.
  */
 
-import { scrapeImdbRating } from './src/lib/scrapers/imdb.js';
+import { scrapeImdbRating } from '../lib/scrapers/imdb.js';
 
 const movies = [
   { title: 'Project Hail Mary', imdbId: 'tt12042730' },
@@ -34,8 +34,7 @@ async function testMovie(movie) {
 async function runTests() {
   for (const movie of movies) {
     await testMovie(movie);
-    // Wait 2 seconds between requests to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
   console.log('===========================================');
@@ -44,7 +43,7 @@ async function runTests() {
   process.exit(0);
 }
 
-runTests().catch(error => {
+runTests().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });

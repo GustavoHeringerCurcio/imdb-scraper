@@ -133,30 +133,53 @@ export function insertMovie(movie) {
  */
 export function upsertMovie(movie) {
   try {
-    // First try to insert
-    try {
-      const result = db.prepare(`
-        INSERT INTO movies (imdbId, title, poster, rottenTomatoesSlug)
-        VALUES (?, ?, ?, ?)
-      `).run(movie.imdbId, movie.title, movie.poster, movie.rottenTomatoesSlug);
-      
-      console.log(`[DB-QUERY] ✓ Inserted movie: ${movie.title} (IMDb: ${movie.imdbId})`);
-      return result.lastInsertRowid;
-    } catch (insertError) {
-      // If unique constraint fails, update the existing record
-      if (insertError.message.includes('UNIQUE')) {
-        db.prepare(`
-          UPDATE movies 
-          SET title = ?, poster = ?, rottenTomatoesSlug = ?
-          WHERE imdbId = ?
-        `).run(movie.title, movie.poster, movie.rottenTomatoesSlug, movie.imdbId);
-        
-        const existing = db.prepare('SELECT id FROM movies WHERE imdbId = ?').get(movie.imdbId);
-        console.log(`[DB-QUERY] ✓ Updated movie: ${movie.title} (IMDb: ${movie.imdbId})`);
-        return existing.id;
-      }
-      throw insertError;
+    if (!movie?.imdbId || !movie?.title) {
+      throw new Error('upsertMovie requires imdbId and title');
     }
+
+    const existingByImdb = db.prepare(`
+      SELECT id FROM movies WHERE imdbId = ?
+    `).get(movie.imdbId);
+
+    if (existingByImdb) {
+      db.prepare(`
+        UPDATE movies
+        SET title = ?, poster = ?, rottenTomatoesSlug = ?
+        WHERE id = ?
+      `).run(movie.title, movie.poster, movie.rottenTomatoesSlug, existingByImdb.id);
+
+      console.log(`[DB-QUERY] ✓ Updated movie by IMDb ID: ${movie.title} (IMDb: ${movie.imdbId})`);
+      return existingByImdb.id;
+    }
+
+    const existingByTitle = db.prepare(`
+      SELECT id, imdbId
+      FROM movies
+      WHERE LOWER(title) = LOWER(?)
+      ORDER BY datetime(createdAt) DESC, id DESC
+      LIMIT 1
+    `).get(movie.title);
+
+    if (existingByTitle) {
+      db.prepare(`
+        UPDATE movies
+        SET imdbId = ?, title = ?, poster = ?, rottenTomatoesSlug = ?
+        WHERE id = ?
+      `).run(movie.imdbId, movie.title, movie.poster, movie.rottenTomatoesSlug, existingByTitle.id);
+
+      console.log(
+        `[DB-QUERY] ✓ Updated movie by title: ${movie.title} (IMDb: ${existingByTitle.imdbId} -> ${movie.imdbId})`
+      );
+      return existingByTitle.id;
+    }
+
+    const result = db.prepare(`
+      INSERT INTO movies (imdbId, title, poster, rottenTomatoesSlug)
+      VALUES (?, ?, ?, ?)
+    `).run(movie.imdbId, movie.title, movie.poster, movie.rottenTomatoesSlug);
+
+    console.log(`[DB-QUERY] ✓ Inserted movie: ${movie.title} (IMDb: ${movie.imdbId})`);
+    return result.lastInsertRowid;
   } catch (error) {
     console.error('[DB-QUERY] Error upserting movie:', error.message);
     throw error;

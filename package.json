@@ -5,7 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "seed:db": "node src/scripts/seedDatabase.js",
+    "normalize:movies": "node src/scripts/normalizeMoviesDb.js",
+    "verify:db": "node src/scripts/verifyDb.js",
+    "debug:imdb": "node src/scripts/debugImdbScraper.js",
+    "debug:imdb:sequential": "node src/scripts/debugImdbSequential.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",

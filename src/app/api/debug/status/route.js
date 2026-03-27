@@ -29,10 +29,16 @@ export async function GET() {
 
     // Get sample ratings (latest for each source)
     const latestRatings = db.prepare(`
-      SELECT DISTINCT ON (source) 
-        source, value, status, scrapedAt
-      FROM ratings 
-      ORDER BY source, scrapedAt DESC
+      SELECT r.source, r.value, r.status, r.scrapedAt
+      FROM ratings r
+      INNER JOIN (
+        SELECT source, MAX(scrapedAt) AS maxScrapedAt
+        FROM ratings
+        GROUP BY source
+      ) latest
+      ON latest.source = r.source
+      AND latest.maxScrapedAt = r.scrapedAt
+      ORDER BY r.source
       LIMIT 3
     `).all();
 

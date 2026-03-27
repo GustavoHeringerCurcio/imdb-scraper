@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Debug: Test IMDb scraping for each movie SEQUENTIALLY (not parallel)
- * This helps identify if the issue is with parallel execution or specific movies
+ * Debug: Test IMDb scraping for each movie sequentially.
  */
 
-import { scrapeImdbRating } from './src/lib/scrapers/imdb.js';
+import { scrapeImdbRating } from '../lib/scrapers/imdb.js';
 
 const movies = [
   { title: 'Project Hail Mary', imdbId: 'tt12042730' },
@@ -25,18 +24,17 @@ async function testMovieSequentially(movie) {
 
   try {
     const result = await scrapeImdbRating(movie.imdbId);
-    console.log(`    Result:`, {
+    console.log('    Result:', {
       imdbRating: result.imdbRating?.value || 'N/A',
       metascore: result.metascore?.value || 'N/A',
       status: result.status || 'error',
     });
   } catch (error) {
-    console.error(`    ERROR:`, error.message);
+    console.error('    ERROR:', error.message);
   }
 
-  // Wait 3 seconds between movies
   console.log('    (waiting 3s before next movie)');
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  await new Promise((resolve) => setTimeout(resolve, 3000));
 }
 
 async function runTests() {
@@ -50,7 +48,7 @@ async function runTests() {
   process.exit(0);
 }
 
-runTests().catch(error => {
+runTests().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
 });
