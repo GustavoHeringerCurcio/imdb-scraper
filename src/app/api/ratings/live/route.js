@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getLiveRatingsForMovies } from '@/lib/ratings/getLiveRatings';
+import { getLiveRatingsForMovies } from '@/lib/services/ratings.js';
 
 export const runtime = 'nodejs';
 

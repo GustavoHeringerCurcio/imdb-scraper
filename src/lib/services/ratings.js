@@ -1,28 +1,27 @@
-import { scrapeImdbRating } from '../scrapers/imdb';
-import { scrapeRottenTomatoesRating } from '../scrapers/rottenTomatoes';
+import { scrapeImdbRating } from '@/lib/scrapers/imdb.js';
+import { scrapeRottenTomatoesRating } from '@/lib/scrapers/rottenTomatoes.js';
 
 export async function getLiveRatingsForMovie(movie) {
   console.log(`[SCRAPER-INPUT] Movie: ${movie.id}`, {
     title: movie.title,
-    imdbID: movie.imdbID || '⚠️ NULL (will fail)',
-    rottenTomatoesSlug: movie.rottenTomatoesSlug || '⚠️ NULL (will fail)',
+    imdbID: movie.imdbID || 'NULL (will fail)',
+    rottenTomatoesSlug: movie.rottenTomatoesSlug || 'NULL (will fail)',
   });
 
-  // IMDb scraper now returns multi-field response: { imdbRating, metascore }
   const imdbResponse = await scrapeImdbRating(movie.imdbID);
-  
-  // Unpack IMDb response into separate fields
-  let imdb, metascore;
+
+  let imdb;
+  let metascore;
+
   if (imdbResponse.imdbRating) {
     imdb = imdbResponse.imdbRating;
   } else {
-    // Fallback if response structure is single value (shouldn't happen with new implementation)
     imdb = imdbResponse.source === 'IMDb' ? imdbResponse : { value: 'N/A', status: 'error' };
   }
+
   if (imdbResponse.metascore) {
     metascore = imdbResponse.metascore;
   } else {
-    // Create null response for metascore if not extracted
     metascore = { value: 'N/A', status: 'parse-error', url: imdbResponse.imdbRating?.url };
   }
 

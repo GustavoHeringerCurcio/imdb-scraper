@@ -1,4 +1,4 @@
-import { getLiveRatingsForMovies } from '@/lib/ratings/getLiveRatings.js';
+import { getLiveRatingsForMovies } from '@/lib/services/ratings.js';
 import { getAllMovies, saveRatings, logJobRun } from '@/lib/db/queries.js';
 
 /**

@@ -2,8 +2,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import MovieCard from './components/MovieCard';
-import { MOVIE_TITLES } from './constants';
-import { fetchMoviesByTitles } from './lib/omdbDebug';
+import { MOVIE_TITLES } from '@/lib/config/movies.js';
+import { fetchMoviesByTitles } from '@/lib/services/omdb.js';
 
 // Sync OMDb movies to database (auto-updates IMDb IDs, posters, titles)
 async function syncMoviesToDatabase(movies) {
