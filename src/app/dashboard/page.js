@@ -5,6 +5,7 @@ import MovieCard from './components/MovieCard';
 import { fetchMoviesByTitles } from '@/lib/services/omdb.js';
 
 const NOW_PLAYING_LANGUAGE = 'en-US';
+const MIN_DASHBOARD_POPULARITY = 30.000;
 
 async function fetchNowPlayingMovies() {
   const response = await fetch(
@@ -54,11 +55,23 @@ export default function MovieDashboard() {
         return;
       }
 
-      const fallbackByTitle = Object.fromEntries(
-        nowPlayingMovies.map((movie) => [movie.title, movie])
+      const popularNowPlayingMovies = nowPlayingMovies.filter(
+        (movie) => Number(movie?.popularity ?? 0) >= MIN_DASHBOARD_POPULARITY
       );
 
-      const movieTitles = nowPlayingMovies.map((movie) => movie.title);
+      if (popularNowPlayingMovies.length === 0) {
+        setMovies([]);
+        setEmptyMessage(
+          `No now-playing movies reached popularity ${MIN_DASHBOARD_POPULARITY}+ on TMDB.`
+        );
+        return;
+      }
+
+      const fallbackByTitle = Object.fromEntries(
+        popularNowPlayingMovies.map((movie) => [movie.title, movie])
+      );
+
+      const movieTitles = popularNowPlayingMovies.map((movie) => movie.title);
       let baseMovies;
 
       try {
@@ -66,7 +79,7 @@ export default function MovieDashboard() {
           fallbackByTitle,
         });
       } catch {
-        baseMovies = nowPlayingMovies.map((movie) => ({
+        baseMovies = popularNowPlayingMovies.map((movie) => ({
           id: movie.id,
           tmdbId: movie.tmdbId,
           releaseDate: movie.releaseDate,
