@@ -1,147 +1,93 @@
-
+﻿
 'use client';
 import { useEffect, useState } from 'react';
 import MovieCard from './components/MovieCard';
-import { MOVIE_TITLES } from '@/lib/config/movies.js';
 import { fetchMoviesByTitles } from '@/lib/services/omdb.js';
 
-// Sync OMDb movies to database (auto-updates IMDb IDs, posters, titles)
-async function syncMoviesToDatabase(movies) {
-  console.log(`[DASHBOARD] Syncing ${movies.length} movies to database...`);
-  try {
-    const response = await fetch('/api/movies/sync', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ movies }),
-    });
+const NOW_PLAYING_LANGUAGE = 'en-US';
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`[DASHBOARD] ✓ Synced ${data.synced} movies to database`);
-    } else {
-      console.warn('[DASHBOARD] ⚠️ Database sync failed, but continuing anyway');
+async function fetchNowPlayingMovies() {
+  const response = await fetch(
+    `/api/movies/now-playing?language=${encodeURIComponent(NOW_PLAYING_LANGUAGE)}`,
+    {
+      method: 'GET',
+      cache: 'no-store',
     }
-  } catch (error) {
-    console.warn('[DASHBOARD] ⚠️ Could not sync to database:', error.message);
-  }
-}
-
-async function fetchCachedRatings(movies) {
-  console.log(`[DASHBOARD] Calling /api/ratings/cached with ${movies.length} movies`);
-  const response = await fetch('/api/ratings/cached', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      movies: movies.map((movie) => ({
-        id: movie.id,
-        title: movie.title,
-        imdbID: movie.imdbID,
-        rottenTomatoesSlug: movie.rottenTomatoesSlug,
-      })),
-    }),
-  });
-
-  console.log(`[DASHBOARD] API response status: ${response.status}`);
+  );
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Cached ratings endpoint returned ${response.status}: ${errorData.error}`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'TMDB now-playing request failed');
   }
 
-  const data = await response.json();
-  console.log(`[DASHBOARD] ✓ Received cached ratings for ${data.liveRatings?.length || 0} movies`);
-  return data;
+  const payload = await response.json();
+  return Array.isArray(payload?.movies) ? payload.movies : [];
 }
 
-function mergeWithLiveRatings(movies, liveRatings) {
-  const ratingsById = new Map(liveRatings.map((entry) => [entry.id, entry]));
-
-  return movies.map((movie) => {
-    const live = ratingsById.get(movie.id);
-
-    return {
-      ...movie,
-      // Always use scraped value if available, else 'N/A'
-      imdbRating: live?.imdb?.value && live.imdb.value !== 'N/A' 
-        ? live.imdb.value 
-        : 'N/A',
-      rottenTomatoes: live?.rottenTomatoes?.value && live.rottenTomatoes.value !== 'N/A'
-        ? live.rottenTomatoes.value
-        : 'N/A',
-      metascore: live?.metascore?.value && live.metascore.value !== 'N/A'
-        ? live.metascore.value
-        : 'N/A',
-      // Track source/status for debugging
-      imdbStatus: live?.imdb?.status || 'no-data',
-      rottenTomatoesStatus: live?.rottenTomatoes?.status || 'no-data',
-      metascoreStatus: live?.metascore?.status || 'no-data',
-      liveFetchedAt: live?.imdb?.scrapedAt || null,
-    };
+function logTmdbSignalsForEveryMovie(movies) {
+  movies.forEach((movie) => {
+    console.log(`[TMDB-MOVIE-JSON] ${JSON.stringify(movie, null, 2)}`);
+    console.debug(
+      `[TMDB-SIGNALS] ${movie.title} | popularity: ${movie.popularity ?? 'not-found'} | vote_average: ${movie.voteAverage ?? 'not-found'} | vote_count: ${movie.voteCount ?? 'not-found'}`
+    );
   });
 }
 
 export default function MovieDashboard() {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [emptyMessage, setEmptyMessage] = useState('');
 
   const loadMovies = async () => {
     setLoading(true);
     setError('');
+    setEmptyMessage('');
 
     try {
-      const baseMovies = await fetchMoviesByTitles(MOVIE_TITLES);
+      const nowPlayingMovies = await fetchNowPlayingMovies();
+      logTmdbSignalsForEveryMovie(nowPlayingMovies);
 
-      // IMPORTANT: Sync OMDb data to database (updates IMDb IDs, posters, etc)
-      await syncMoviesToDatabase(baseMovies);
+      if (nowPlayingMovies.length === 0) {
+        setMovies([]);
+        setEmptyMessage('No now-playing movies returned by TMDB for Brazil.');
+        return;
+      }
+
+      const fallbackByTitle = Object.fromEntries(
+        nowPlayingMovies.map((movie) => [movie.title, movie])
+      );
+
+      const movieTitles = nowPlayingMovies.map((movie) => movie.title);
+      let baseMovies;
 
       try {
-        const cachedRatingsPayload = await fetchCachedRatings(baseMovies);
-        const withCachedRatings = mergeWithLiveRatings(baseMovies, cachedRatingsPayload.liveRatings || []);
-        console.log('[DASHBOARD] ✓ Merged cached ratings, setting movies state');
-        setMovies(withCachedRatings);
-      } catch (cachedError) {
-        console.error('[DASHBOARD] ✗ Cached ratings fetch failed:', cachedError.message);
-        console.warn('[DASHBOARD] Showing base OMDb data only (no ratings in database yet)');
-        setMovies(baseMovies); // Fallback to OMDb-only data
+        baseMovies = await fetchMoviesByTitles(movieTitles, {
+          fallbackByTitle,
+        });
+      } catch {
+        baseMovies = nowPlayingMovies.map((movie) => ({
+          id: movie.id,
+          tmdbId: movie.tmdbId,
+          releaseDate: movie.releaseDate,
+          title: movie.title,
+          imdbID: null,
+          rottenTomatoesSlug: null,
+          poster: movie.poster,
+          imdbRating: 'not-found',
+          imdbStatus: 'omdb-request-failed',
+          rottenTomatoes: 'not-found',
+          rottenTomatoesStatus: 'omdb-request-failed',
+          metascore: 'not-found',
+          metascoreStatus: 'omdb-request-failed',
+        }));
       }
-    } catch (fetchError) {
-      console.error('[DASHBOARD] Failed to fetch movies:', fetchError);
-      setError('Could not load movie data from OMDb.');
+
+      setMovies(baseMovies);
+    } catch {
+      setError('Could not load movie data from TMDB/OMDb.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const refreshRatingsNow = async () => {
-    setRefreshing(true);
-    console.log('[DASHBOARD] Starting manual refresh...');
-
-    try {
-      const response = await fetch('/api/ratings/refresh-now', {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[DASHBOARD] ✓ Refresh completed:', data.message);
-        // Reload movies from cache
-        await loadMovies();
-      } else {
-        const error = await response.json();
-        console.error('[DASHBOARD] ✗ Refresh failed:', error.error);
-        setError('Failed to refresh ratings');
-      }
-    } catch (error) {
-      console.error('[DASHBOARD] ✗ Refresh error:', error.message);
-      setError('Error refreshing ratings');
-    } finally {
-      setRefreshing(false);
     }
   };
 
@@ -156,21 +102,18 @@ export default function MovieDashboard() {
           <div>
             <h2 className="text-2xl font-bold">Movie Dashboard</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Ratings updated daily at 2 AM. Showing cached data from database.
+              Showing now-playing movies in Brazil from TMDB with OMDb ratings.
             </p>
           </div>
-          <button
-            onClick={refreshRatingsNow}
-            disabled={refreshing}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
-          >
-            {refreshing ? '⏳ Refreshing...' : '🔄 Refresh Ratings Now'}
-          </button>
         </div>
 
-        {loading && <p className="text-sm text-blue-700">⏳ Loading movies...</p>}
+        {loading && <p className="text-sm text-blue-700">Loading movies...</p>}
 
-        {error && <p className="text-sm text-red-600">❌ {error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        {!loading && !error && emptyMessage && (
+          <p className="text-sm text-amber-700">{emptyMessage}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

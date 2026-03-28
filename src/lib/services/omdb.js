@@ -1,44 +1,99 @@
-import {
-  FALLBACK_POSTER,
-  ROTTEN_TOMATOES_SLUG_BY_TITLE,
-} from '@/lib/config/movies.js';
-
 const OMDB_API_KEY = process.env.NEXT_PUBLIC_OMDB_API_KEY || 'd81d197';
-const ENABLE_OMDB_DEBUG_LOGS = process.env.NEXT_PUBLIC_OMDB_DEBUG === 'true';
+const ROTTEN_TOMATOES_SLUG_OVERRIDES = {};
+const FALLBACK_POSTER = 'https://placehold.co/400x600?text=No+Poster';
 
-function mapMovieResponse(movie, title, index) {
-  const isValid = movie?.Response === 'True';
-  const rtSlug = ROTTEN_TOMATOES_SLUG_BY_TITLE[title] || null;
+function parseRottenTomatoesFromRatings(ratings) {
+  if (!Array.isArray(ratings)) {
+    return null;
+  }
 
-  if (ENABLE_OMDB_DEBUG_LOGS) {
-    console.log(`[OMDb-MAPPER] ${title}:`, {
-      Response: movie?.Response,
-      imdbID: movie?.imdbID || 'MISSING',
-      Title: movie?.Title,
-      Poster: movie?.Poster ? 'present' : 'missing',
-      RTSlug: rtSlug || 'MISSING',
-    });
+  const rt = ratings.find((entry) => entry?.Source === 'Rotten Tomatoes');
+  return rt?.Value || null;
+}
+
+function toOmdbRating(value, isMatch) {
+  if (!isMatch) {
+    return {
+      value: null,
+      status: 'omdb-no-match',
+    };
+  }
+
+  if (!value || value === 'N/A') {
+    return {
+      value: null,
+      status: 'omdb-not-rated-yet',
+    };
   }
 
   return {
-    id: `${title}-${index}`,
-    title: isValid ? movie.Title : title,
-    imdbID: isValid ? movie.imdbID : null,
-    rottenTomatoesSlug: rtSlug,
-    poster: isValid && movie.Poster !== 'N/A' ? movie.Poster : FALLBACK_POSTER,
-    imdbRating: 'N/A',
-    rottenTomatoes: 'N/A',
+    value,
+    status: 'omdb',
   };
 }
 
-export async function fetchMoviesByTitles(movieTitles) {
+function buildRottenTomatoesSlug(title, releaseYear) {
+  if (!title) {
+    return null;
+  }
+
+  const normalized = title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_+/g, '_');
+
+  if (!normalized) {
+    return null;
+  }
+
+  return releaseYear ? `${normalized}_${releaseYear}` : normalized;
+}
+
+function mapMovieResponse(movie, title, index, fallbackMovie = null) {
+  const isValid = movie?.Response === 'True';
+  const effectiveTitle = isValid ? movie.Title : title;
+  const parsedYear = movie?.Year ? Number.parseInt(movie.Year, 10) : Number.NaN;
+  const releaseYear = Number.isFinite(parsedYear) ? parsedYear : null;
+  const rtSlug =
+    ROTTEN_TOMATOES_SLUG_OVERRIDES[effectiveTitle] ||
+    buildRottenTomatoesSlug(effectiveTitle, releaseYear);
+
+
+  const imdb = toOmdbRating(movie?.imdbRating, isValid);
+  const metascore = toOmdbRating(movie?.Metascore, isValid);
+  const rottenTomatoes = toOmdbRating(parseRottenTomatoesFromRatings(movie?.Ratings), isValid);
+
+  return {
+    id: fallbackMovie?.id || `${title}-${index}`,
+    tmdbId: fallbackMovie?.tmdbId || null,
+    releaseDate: fallbackMovie?.releaseDate || null,
+    title: effectiveTitle,
+    imdbID: isValid ? movie.imdbID : null,
+    rottenTomatoesSlug: rtSlug,
+    poster:
+      isValid && movie.Poster !== 'N/A'
+        ? movie.Poster
+        : fallbackMovie?.poster || FALLBACK_POSTER,
+    imdbRating: imdb.value,
+    imdbStatus: imdb.status,
+    rottenTomatoes: rottenTomatoes.value,
+    rottenTomatoesStatus: rottenTomatoes.status,
+    metascore: metascore.value,
+    metascoreStatus: metascore.status,
+  };
+}
+
+export async function fetchMoviesByTitles(movieTitles, options = {}) {
   if (!Array.isArray(movieTitles) || movieTitles.length === 0) {
     return [];
   }
 
-  if (ENABLE_OMDB_DEBUG_LOGS) {
-    console.log(`[OMDb-FETCH] Fetching ${movieTitles.length} movies from OMDb API`);
-  }
+  const fallbackByTitle = options?.fallbackByTitle || {};
+
 
   const requests = movieTitles.map((title) => {
     const url = `https://www.omdbapi.com/?t=${encodeURIComponent(title)}&apikey=${OMDB_API_KEY}`;
@@ -46,18 +101,11 @@ export async function fetchMoviesByTitles(movieTitles) {
   });
 
   const results = await Promise.all(requests);
-  const mapped = results.map((movie, index) => mapMovieResponse(movie, movieTitles[index], index));
+  const mapped = results.map((movie, index) => {
+    const title = movieTitles[index];
+    return mapMovieResponse(movie, title, index, fallbackByTitle[title] || null);
+  });
 
-  if (ENABLE_OMDB_DEBUG_LOGS) {
-    console.log(
-      '[OMDb-MAPPED] Processed movies:',
-      mapped.map((movie) => ({
-        id: movie.id,
-        imdbID: movie.imdbID,
-        rottenTomatoesSlug: movie.rottenTomatoesSlug,
-      }))
-    );
-  }
 
   return mapped;
 }
