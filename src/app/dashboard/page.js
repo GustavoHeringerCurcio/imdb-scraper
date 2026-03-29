@@ -82,9 +82,9 @@ function normalizeToTenScale(rawValue, source) {
 }
 
 function computeAverate(movie) {
-  // Rotten Tomatoes is temporarily excluded from Averate.
   const values = [
     normalizeToTenScale(movie.imdbRating, 'imdb'),
+    normalizeToTenScale(movie.rottenTomatoes, 'rottenTomatoes'),
     normalizeToTenScale(movie.metascore, 'metascore'),
   ].filter((value) => value !== null);
 
@@ -103,10 +103,30 @@ function computeAverate(movie) {
   };
 }
 
-function attachAverate(movie) {
+function mirrorRottenTomatoesFromImdbForTesting(movie) {
+  const imdbParsed = parseNumericRating(movie.imdbRating);
+
+  if (imdbParsed === null) {
+    return movie;
+  }
+
+  const mirroredRtPercent = Math.max(0, Math.min(100, Math.round(imdbParsed * 10)));
+
   return {
     ...movie,
-    ...computeAverate(movie),
+    // Temporary testing fallback until Rotten Tomatoes fetch is available.
+    // RT is expected in 0-100 scale, then normalized to 0-10 in computeAverate.
+    rottenTomatoes: String(mirroredRtPercent),
+    rottenTomatoesStatus: movie.imdbStatus === 'ok' ? 'ok' : movie.rottenTomatoesStatus,
+  };
+}
+
+function attachAverate(movie) {
+  const enrichedMovie = mirrorRottenTomatoesFromImdbForTesting(movie);
+
+  return {
+    ...enrichedMovie,
+    ...computeAverate(enrichedMovie),
   };
 }
 

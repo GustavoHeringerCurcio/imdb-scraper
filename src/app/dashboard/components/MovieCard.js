@@ -1,36 +1,100 @@
+import { SiImdb, SiMetacritic, SiRottentomatoes } from 'react-icons/si';
+
+function getAverateToneClass(averateValue) {
+  if (averateValue === null || averateValue === undefined) {
+    return 'averate-score-unknown';
+  }
+
+  if (averateValue >= 7.5) {
+    return 'averate-score-good';
+  }
+
+  if (averateValue >= 6) {
+    return 'averate-score-medium';
+  }
+
+  if (averateValue >= 5) {
+    return 'averate-score-warn';
+  }
+
+  return 'averate-score-bad';
+}
+
+function formatRatingValue(value) {
+  if (value === null || value === undefined || value === 'not-found') {
+    return 'N/A';
+  }
+
+  return String(value);
+}
+
+function shouldShowStatus(status) {
+  if (!status || status === 'ok') {
+    return false;
+  }
+
+  // Hide this fallback status because it creates noisy wrapping beside N/A.
+  if (status === 'rapidapi-not-rated-yet') {
+    return false;
+  }
+
+  return true;
+}
+
 export default function MovieCard({ movie }) {
   const averateText = movie.averateDisplay === 'not-found' ? 'N/A' : movie.averateDisplay;
+  const scoreToneClass = getAverateToneClass(movie.averateValue);
 
   return (
     <article className="averate-surface rounded-2xl overflow-hidden border border-slate-700/70 shadow-[0_20px_45px_rgba(1,8,27,0.55)]">
-      <img
-        src={movie.poster}
-        alt={`${movie.title} poster`}
-        className="w-full h-80 object-cover"
-      />
-      <div className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="font-semibold text-xl leading-tight text-white">{movie.title}</h3>
-          <div className="averate-chip min-w-24 text-center">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-900/70">Averate</p>
-            <p className="text-2xl leading-none font-bold text-slate-950 mt-1">{averateText}</p>
-          </div>
+      <div className="relative">
+        <img
+          src={movie.poster}
+          alt={`${movie.title} poster`}
+          className="w-full h-80 object-cover"
+        />
+
+        <div className={`averate-score-circle ${scoreToneClass}`} aria-label={`Averate ${averateText}`}>
+          <span className="averate-score-value">{averateText}</span>
         </div>
+      </div>
 
-        <div className="space-y-1 text-sm text-slate-200">
-          <p>
-            IMDb: <span className="font-semibold text-white">{movie.imdbRating}</span>
-            {movie.imdbStatus && movie.imdbStatus !== 'ok' && (
-              <span className="text-xs text-slate-400 ml-1">({movie.imdbStatus})</span>
-            )}
-          </p>
+      <div className="p-4 space-y-2">
+        <h3 className="font-semibold text-lg leading-tight text-white">{movie.title}</h3>
 
-          <p>
-            Metascore: <span className="font-semibold text-white">{movie.metascore}</span>
-            {movie.metascoreStatus && movie.metascoreStatus !== 'ok' && (
-              <span className="text-xs text-slate-400 ml-1">({movie.metascoreStatus})</span>
+        <div className="averate-rating-list">
+          <div className="averate-rating-row">
+            <span className="averate-rating-icon imdb" aria-hidden="true">
+              <SiImdb size={16} />
+            </span>
+            <span className="averate-rating-label">IMDb</span>
+            <span className="averate-rating-value">{formatRatingValue(movie.imdbRating)}</span>
+            {shouldShowStatus(movie.imdbStatus) && (
+              <span className="averate-rating-status">{movie.imdbStatus}</span>
             )}
-          </p>
+          </div>
+
+          <div className="averate-rating-row">
+            <span className="averate-rating-icon rotten" aria-hidden="true">
+              <SiRottentomatoes size={16} />
+            </span>
+            <span className="averate-rating-label">Rotten Tomatoes</span>
+            <span className="averate-rating-value">{formatRatingValue(movie.rottenTomatoes)}</span>
+            {shouldShowStatus(movie.rottenTomatoesStatus) && (
+              <span className="averate-rating-status">{movie.rottenTomatoesStatus}</span>
+            )}
+          </div>
+
+          <div className="averate-rating-row">
+            <span className="averate-rating-icon metacritic" aria-hidden="true">
+              <SiMetacritic size={16} />
+            </span>
+            <span className="averate-rating-label">Metascore</span>
+            <span className="averate-rating-value">{formatRatingValue(movie.metascore)}</span>
+            {shouldShowStatus(movie.metascoreStatus) && (
+              <span className="averate-rating-status">{movie.metascoreStatus}</span>
+            )}
+          </div>
         </div>
 
         {movie.liveFetchedAt && (
